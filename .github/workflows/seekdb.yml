@@ -9,12 +9,9 @@ on:
     branches: [master, develop]
     types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
+      - '**/*.md'
       - 'docs/**'
       - '.github/ISSUE_TEMPLATE/**'
-      - '.github/pull_request_template.md'
-      - 'README.md'
-      - 'README_CN.md'
-      - 'CONTRIBUTING.md'
   schedule:
     - cron: '30 9 * * *'
 
@@ -94,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           CACHE_ROOT="$SEEKDB_CACHE_NFS_ROOT/shared"
-          RUST_CONFIG=$(sha256sum rust/rust-toolchain.toml | cut -d ' ' -f 1)
+          RUST_CONFIG=$(sha256sum rust-toolchain.toml | cut -d ' ' -f 1)
           mkdir -p "$CACHE_ROOT/deps" "$CACHE_ROOT/bazel" "$CACHE_ROOT/cargo" "$CACHE_ROOT/rustup/$RUST_CONFIG"
           {
             echo "DEP_CACHE_DIR=$CACHE_ROOT/deps"

@@ -17,6 +17,7 @@
 #define USING_LOG_PREFIX LIB
 
 #include "thread.h"
+#include <inttypes.h>
 #ifdef _WIN32
 #include <windows.h>
 #ifdef ERROR
@@ -29,7 +30,6 @@
 #include "lib/rc/context.h"
 #include "lib/thread/protected_stack_allocator.h"
 #include "lib/utility/ob_hang_fatal_error.h"
-#include "lib/signal/ob_signal_struct.h"
 #include "lib/thread_local/ob_tsi_factory.h"
 
 using namespace oceanbase;
@@ -371,29 +371,23 @@ void* Thread::__th_start(void *arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(th), K(ret));
   } else {
-    ObPageManager pm;
-    ret = pm.set_ctx(common::ObCtxIds::GLIBC);
-    if (OB_FAIL(ret)) {
+    MemoryContext *mem_context = GET_TSI0(MemoryContext);
+    if (OB_ISNULL(mem_context)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("null ptr", K(ret));
+    } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
+                       ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
+                                     .set_label("ThreadRoot")))) {
     } else {
-      ObPageManager::set_thread_local_instance(pm);
-      MemoryContext *mem_context = GET_TSI0(MemoryContext);
-      if (OB_ISNULL(mem_context)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("null ptr", K(ret));
-      } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
-                         ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
-                                       .set_label("ThreadRoot")))) {
-      } else {
-        WITH_CONTEXT(*mem_context) {
+      WITH_CONTEXT(*mem_context) {
 #if !defined(__APPLE__)
-          ATOMIC_STORE(&th->create_ret_, OB_SUCCESS);
+        ATOMIC_STORE(&th->create_ret_, OB_SUCCESS);
 #endif
-          th->run();
-        }
+        th->run();
       }
-      if (mem_context != nullptr && *mem_context != nullptr) {
-        DESTROY_CONTEXT(*mem_context);
-      }
+    }
+    if (mem_context != nullptr && *mem_context != nullptr) {
+      DESTROY_CONTEXT(*mem_context);
     }
   }
   if (OB_FAIL(ret)) {
@@ -459,7 +453,7 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
   if (tid == 0) {
     ret = OB_NOT_INIT;
   } else {
-    snprintf(stat_path, PATH_BUFSIZE, "/proc/%d/task/%ld/stat", pid, tid);
+    snprintf(stat_path, PATH_BUFSIZE, "/proc/%d/task/%" PRId64 "/stat", pid, tid);
     if ((fd = ::open(stat_path, O_RDONLY)) < 0) {
       ret = OB_IO_ERROR;
     } else if ((read_size = read(fd, stat_content, MAX_LINE_LENGTH)) < 0) {

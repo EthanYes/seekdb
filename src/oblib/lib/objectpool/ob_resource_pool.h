@@ -17,6 +17,7 @@
 #ifndef  OCEANBASE_UPDATESERVER_RESOURCE_POOL_H_
 #define  OCEANBASE_UPDATESERVER_RESOURCE_POOL_H_
 #include <typeinfo>
+#include <inttypes.h>
 #include "lib/ob_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/queue/ob_fixed_queue.h"
@@ -72,7 +73,7 @@ protected:
   static const int64_t WARN_INTERVAL = 60000000L; //60s
   static const uint64_t ALLOC_MAGIC_NUM = 0x72737263706f6f6c; // rsrcpool
   static const uint64_t ALLOC_BY_INNER_ALLOCATOR = 0x0;
-  static const uint64_t ALLOC_BY_OBMALLOC = 0x1;
+  static const uint64_t ALLOC_BY_BACKING_ALLOCATOR = 0x1;
   static const int64_t CHECK_INTERVAL = 100000;
   static const int64_t UPDATE_INTERVAL = 5000000;
   struct Node
@@ -190,7 +191,7 @@ public:
     if (NULL != ptr) {
       Node *node = (Node *)ptr;
       if (ALLOC_MAGIC_NUM != node->magic) {
-        _COMMON_LOG_RET(ERROR, OB_ERROR, "node=%p magic=%lx not match %lx", node, node->magic,
+        _COMMON_LOG_RET(ERROR, OB_ERROR, "node=%p magic=%" PRIx64 " not match %" PRIx64 "", node, node->magic,
                     ALLOC_MAGIC_NUM);
       } else {
         free_node_(node);
@@ -219,7 +220,7 @@ protected:
           (void)ATOMIC_AAF(&inner_used_num_, 1);
         }
       } else {
-        flag = ALLOC_BY_OBMALLOC;
+        flag = ALLOC_BY_BACKING_ALLOCATOR;
         buffer = common::ob_malloc(sizeof(Node), mem_attr_);
         (void)ATOMIC_AAF(&inner_allocated_num_, -1);
       }
@@ -250,7 +251,7 @@ protected:
         bool need_free = true;
         if (ATOMIC_LOAD(&inner_allocated_num_) < max_idle_num_) {
           if (common::OB_SUCCESS != free_list_.push(ptr)) {
-            _COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "free node to list fail, size=%ld ptr=%p", free_list_.get_total(), ptr);
+            _COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "free node to list fail, size=%" PRId64 " ptr=%p", free_list_.get_total(), ptr);
           } else {
             need_free = false;
           }
@@ -260,11 +261,11 @@ protected:
           allocator_->free(ptr);
         }
         (void)ATOMIC_AAF(&inner_used_num_, -1);
-      } else if (ALLOC_BY_OBMALLOC == ptr->flag) {
+      } else if (ALLOC_BY_BACKING_ALLOCATOR == ptr->flag) {
         ptr->~Node();
         common::ob_free(ptr);
       } else {
-        _COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid flag=%lu", ptr->flag);
+        _COMMON_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid flag=%" PRIu64 "", ptr->flag);
       }
     }
   }

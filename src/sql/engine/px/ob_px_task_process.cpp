@@ -27,10 +27,8 @@
 #include "sql/engine/pdml/static/ob_px_multi_part_insert_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
-#include "sql/monitor/ob_process_malloc_callback.h"
 #include "sql/ob_sql.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
-#include "lib/signal/ob_signal_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -112,18 +110,12 @@ int ObPxTaskProcess::process()
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(session->store_query_string(ObString::make_string("PX DFO EXECUTING")))) {
   } else {
-    // Set diagnostic function environment
     ObPxInitSqcArgs &arg = arg_.sqc_handler_->get_sqc_init_arg();
-    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     const bool enable_sqlstat = session->is_sqlstat_enabled();
     ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
-    session->get_raw_audit_record().request_memory_used_ = 0;
-    ObProcessMallocCallback pmcb(0,
-          session->get_raw_audit_record().request_memory_used_);
-    lib::ObMallocCallbackGuard guard(pmcb);
     session->set_cur_phy_plan(arg_.des_phy_plan_);
     session->set_thread_id(GETTID());
     arg_.exec_ctx_->reference_my_plan(arg_.des_phy_plan_);
